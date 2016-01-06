@@ -11,6 +11,8 @@ import scrapy
 class GrpItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
+    area_range = scrapy.Field()
+    status = scrapy.Field()
     project_url = scrapy.Field()
     photos = scrapy.Field()
     property_name = scrapy.Field()

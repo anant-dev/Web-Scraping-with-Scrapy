@@ -4,7 +4,6 @@ from grpdiscount.items import GrpItem
 import xlwt
 import xlrd
 
-
 class grp_spider(scrapy.Spider):
     name = "discount"
     allowed_domains = ['housing.com']
@@ -218,6 +217,3 @@ class grp_spider(scrapy.Spider):
         for href in response.xpath('//div[@class="results-container"]/div[@class="list-card-item"]/div[@data-type="projects"]/div[@class="list-details"]/a[@class="list-name"]/@href'):
             url = response.urljoin(href.extract())
             yield scrapy.Request(url, callback=self.parse_dir_contents)
-
-
-
