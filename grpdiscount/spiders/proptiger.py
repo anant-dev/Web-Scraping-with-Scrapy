@@ -29,7 +29,7 @@ class SearchSpider(scrapy.Spider):
         self.driver.get(response.url)
 
         try:
-            WebDriverWait(self.driver, 60).until(EC.presence_of_element_located((By.XPATH, '//a[@class="btn-action"]')))
+            WebDriverWait(self.driver, 40).until(EC.presence_of_element_located((By.XPATH, '//a[@class="btn-action"]')))
         except TimeoutException:
             print "Time out"
             return
@@ -77,13 +77,46 @@ class SearchSpider(scrapy.Spider):
         if desc:
             try:
                 desc.click()
-                WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.XPATH,'//*[@id="overview"]/div/div[3]/div/span[@data-ng-click="updateFlag(false)"]')))
+                WebDriverWait(self.driver,20).until(EC.presence_of_element_located((By.XPATH,'//*[@id="overview"]/div/div[3]/div/span[@data-ng-click="updateFlag(false)"]')))
                 resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
             except:
                 print 'Full description is not available....'
         description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
         item['description'] = description[3:-2]
 
-        
+        main_amenity = resp.xpath('//div[@class="amenitiesContainer"]//div[contains(@class,"amen-cont-info ")]/span[2]/text()')
+        if main_amenity:
+            main_amenity = format(main_amenity.extract())
+            main_amenity = main_amenity.replace("u'",'')
+            main_amenity = main_amenity.replace('u"','')
+            main_amenity = main_amenity.replace("'",'')
+            main_amenity = main_amenity[1:-1]
+            main_amenity = main_amenity.replace(',','\n')
+        else :
+            main_amenity = []
+        secondary_amenity = resp.xpath('//div[@class="amenitiesContainer"]/div/ul//li/text()')
+        if secondary_amenity:
+            secondary_amenity = format(secondary_amenity.extract())
+            secondary_amenity = secondary_amenity.replace("u'",'')
+            secondary_amenity = secondary_amenity.replace('u"','')
+            secondary_amenity = secondary_amenity.replace("'",'')
+            secondary_amenity = secondary_amenity[1:-1]
+            secondary_amenity = secondary_amenity.replace(',','\n')
+        else :
+            secondary_amenity = []
+        item['amenities'] = main_amenity + secondary_amenity
 
-        #yield item
+        try:
+            for speci in resp.xpath('//div[@class="specificationContainer"]/div[contains(@class,"prop-speci-info")]'):
+                heading = format(speci.xpath('div/div/div[contains(@class,"stat-subComm-head-info")]/text()').extract())
+                item['speciality'] += heading[3:-2] + '\n'
+                for spec in speci.xpath('div/div/div[contains(@class,"spec-item")]'):
+                    print heading
+                    header = format(spec.xpath('b/text()').extract())
+                    value = format(spec.xpath('text()').extract())
+                    print header,value
+                    item['speciality'] += header[3:-2] + ' : ' + value[3:-2] + '\n'
+        except:
+            item['speciality'] = ""
+            print "speciality is not working"
+        yield item['speciality']
