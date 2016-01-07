@@ -154,6 +154,7 @@ class grp_spider(scrapy.Spider):
         	item['builder_desc'] += 'Establised in: ' + temp[3:-2] + '\n' + 'Total Project: '
         	temp = format(response.xpath('//div[@class="builder-details inb-vt"]/div[@class="total-projects"]/div[@class="value"]/text()').extract())
         	item['builder_desc'] += temp[3:-2]
+            
         item['speciality']  = ''
         for inte in response.xpath('//div[@class="interior-body"]/div[@class="interior-card"]'):
         	t1 = format(inte.xpath('div[@class="header-text-secondary"]/text()').extract())
