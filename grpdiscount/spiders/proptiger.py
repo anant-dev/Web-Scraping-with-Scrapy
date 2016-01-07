@@ -14,7 +14,7 @@ class SearchSpider(scrapy.Spider):
     name = "proptiger"
     page =1
     allowed_domains = ['www.proptiger.com']
-    start_urls = ['https://www.proptiger.com/noida/sector-128/jaypee-greens-pavilion-heights-501410']
+    start_urls = ['https://www.proptiger.com/noida/property-sale?page=1']
 
     def __init__(self, filename=None):
         # wire us up to selenium
@@ -202,7 +202,7 @@ class SearchSpider(scrapy.Spider):
             main_amenity = main_amenity[1:-1]
             main_amenity = main_amenity.replace(',','\n')
         else :
-            main_amenity = []
+            main_amenity = ""
         secondary_amenity = resp.xpath('//div[@class="amenitiesContainer"]/div/ul//li/text()')
         if secondary_amenity:
             secondary_amenity = format(secondary_amenity.extract())
@@ -212,7 +212,7 @@ class SearchSpider(scrapy.Spider):
             secondary_amenity = secondary_amenity[1:-1]
             secondary_amenity = secondary_amenity.replace(',','\n')
         else :
-            secondary_amenity = []
+            secondary_amenity = ""
         item['amenities'] = main_amenity + secondary_amenity
 
         item['speciality'] = ""
@@ -314,7 +314,7 @@ class SearchSpider(scrapy.Spider):
         self.driver.get(response.url)
 
         try:
-            WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, '//*[@id="views"]/div/div[2]/div[2]/div[3]/div[10]/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/span')))
+            WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH,'//*[@id="views"]/div/div[2]/div[2]/div[3]/div[10]/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/span')))
         except TimeoutException:
             print "Time out"
             return
@@ -327,11 +327,11 @@ class SearchSpider(scrapy.Spider):
             yield scrapy.Request(url, callback=self.parse_property)
 
 
-        # if self.page == 57 :
-        #     return
+        if self.page == 5 :
+            return
             
-        # self.page += 1
-        # yield Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
-        #               headers={"Referer": "https://www.proptiger.com/noida/property-sale", "X-Requested-With": "XMLHttpRequest"},
-        #               callback=self.parse, 
-        #               dont_filter=True)
+        self.page += 1
+        yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
+                      headers={"Referer": "https://www.proptiger.com/noida/property-sale", "X-Requested-With": "XMLHttpRequest"},
+                      callback=self.parse, 
+                      dont_filter=True)
