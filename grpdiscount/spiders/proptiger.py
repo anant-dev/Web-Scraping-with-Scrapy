@@ -10,15 +10,18 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import time
 import xlwt
+import os
 class SearchSpider(scrapy.Spider):
     name = "proptiger"
-    page =1
+    page =9
     allowed_domains = ['www.proptiger.com']
-    start_urls = ['https://www.proptiger.com/noida/property-sale?page=1']
+    start_urls = ['https://www.proptiger.com/noida/property-sale?page=9']
 
     def __init__(self, filename=None):
         # wire us up to selenium
-        
+        #chromedriver = '/home/shivji/Downloads/chromedriver_linux64'
+        #os.environ["webdriver.chrome.driver"] = chromedriver
+        #self.driver = webdriver.Chrome()
         self.driver = webdriver.Firefox()
         dispatcher.connect(self.spider_closed, signals.spider_closed)
 
@@ -85,7 +88,7 @@ class SearchSpider(scrapy.Spider):
         sheet.write(17,0,'Facing')
         sheet.write(17,1,'')
         sheet.write(18,0,'Description')
-        sheet.write(18,1,'Description of Project')
+        sheet.write(18,1,'Descr-iption of Project')
         sheet.write(19,1,item['description'])
         sheet.write(20,0,'Speciality')
         sheet.write(20,1,item['speciality'])
@@ -178,7 +181,7 @@ class SearchSpider(scrapy.Spider):
             desc = self.driver.find_element_by_xpath('//*[@id="overview"]/div/div[3]/div/span[2]')
             try:
                 desc.click()
-                WebDriverWait(self.driver,8)
+                WebDriverWait(self.driver,5)
                 resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
@@ -188,6 +191,7 @@ class SearchSpider(scrapy.Spider):
                 item['description'] = description[3:-2]
         except:
             try:
+                print "full discription available"
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
             except:
@@ -247,11 +251,15 @@ class SearchSpider(scrapy.Spider):
             temp = format(size.xpath('div[contains(@class,"projDetaInfo")]/h2/a/text()').extract())
             try :
                 temp = temp[3:]
-                ind = temp.index(')')
-                temp = temp[:ind]
-                temp = temp.split('(')
-                item['property_bhk'] += [temp[0]]
-                item['property_size'] += [temp[1]]
+                try:
+                    ind = temp.index(')')
+                    temp = temp[:ind]
+                    temp = temp.split('(')
+                    item['property_bhk'] += [temp[0]]
+                    item['property_size'] += [temp[1]]
+                except :
+                    temp = temp.strip(']')
+                    item['property_bhk'] += [temp]
             except :
                 print "exe"
                 item['property_bhk'] += []
@@ -313,10 +321,12 @@ class SearchSpider(scrapy.Spider):
     def parse(self, response):
         self.driver.get(response.url)
 
+
         try:
             WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH,'//*[@id="views"]/div/div[2]/div[2]/div[3]/div[10]/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/span')))
-        except TimeoutException:
-            print "Time out"
+        except:
+            yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
+                callback=self.parse,)
             return
 
         # Sync scrapy and selenium so they agree on the page we're looking at then let scrapy take over
@@ -326,12 +336,10 @@ class SearchSpider(scrapy.Spider):
             url = resp.urljoin(href.extract())
             yield scrapy.Request(url, callback=self.parse_property)
 
+        # if self.page == 57 :
+        #     return
 
-        if self.page == 5 :
-            return
-            
-        self.page += 1
-        yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
-                      headers={"Referer": "https://www.proptiger.com/noida/property-sale", "X-Requested-With": "XMLHttpRequest"},
-                      callback=self.parse, 
-                      dont_filter=True)
+        # self.page += 1
+        # yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
+        #               callback=self.parse,)
+
