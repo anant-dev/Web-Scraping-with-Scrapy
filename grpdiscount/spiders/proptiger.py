@@ -1,8 +1,8 @@
+import os
 import scrapy
 from scrapy import signals
 from scrapy.xlib.pydispatch import dispatcher
 from scrapy.http import TextResponse
-from grpdiscount.items import GrpItem
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -10,18 +10,61 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import time
 import xlwt
-import os
+
+import Tkinter as tkinter
+from tkinter import *
+
 class SearchSpider(scrapy.Spider):
     name = "proptiger"
-    page =9
+    page = 0
+    start_page =81
+    end_page = 0
+    root = None
+    city = ""
     allowed_domains = ['www.proptiger.com']
-    start_urls = ['https://www.proptiger.com/noida/property-sale?page=9']
+    start_urls = None
+
+    def fetch(self,entries):
+        entry = entries[0]
+        field = entry[0]
+        self.city  = entry[1].get()
+        start_page = entries[1]
+        self.start_page = start_page[1].get()
+        self.page = self.start_page
+        end_page = entries[2]
+        self.end_page = end_page[1].get()
+        print('%s: "%s"' % (field, self.city)) 
+        self.start_urls = ['https://www.proptiger.com/%s/property-sale?page=%s' % (self.city,str(self.start_page))]
+        self.root.destroy()
+
+    def makeform(self,fields):
+       entries = []
+       for field in fields:
+          row = Frame(self.root)
+          lab = Label(row, width=15, text=field, anchor='w')
+          ent = Entry(row)
+          row.pack(side=TOP, fill=X, padx=5, pady=20)
+          lab.pack(side=TOP)
+          ent.pack(side=TOP, expand=YES, fill=X , pady=20)
+          entries.append((field, ent))
+       return entries
 
     def __init__(self, filename=None):
+        fields = 'City Name', 'start_page' ,'end_page'
+        self.root = Tk()
+        self.root.title('GrpDiscount')
+        self.root.geometry("500x500")
+        ents = self.makeform( fields)
+        self.root.bind('<Return>', (lambda event, e=ents: self.fetch(e)))   
+        b1 = Button(self.root, text='Extract data',
+                command=(lambda e=ents: self.fetch(e)))
+        b1.pack(side=TOP, padx=5, pady=5)
+        self.root.mainloop()
         # wire us up to selenium
         #chromedriver = '/home/shivji/Downloads/chromedriver_linux64'
         #os.environ["webdriver.chrome.driver"] = chromedriver
         #self.driver = webdriver.Chrome()
+        #self.input_city()
         self.driver = webdriver.Firefox()
         dispatcher.connect(self.spider_closed, signals.spider_closed)
 
@@ -117,10 +160,10 @@ class SearchSpider(scrapy.Spider):
             if not 'youtube' in image:
                 sheet.write(27,col,image)
                 col+=1
-        workbook.save(item['property_name']+'.xlsx')
+        workbook.save(item["property_name"]+'.xlsx')
 
     def parse_property(self, response):
-        item = GrpItem()
+        item = {}
         # Load the current page into Selenium
         self.driver.get(response.url)
 
@@ -181,7 +224,7 @@ class SearchSpider(scrapy.Spider):
             desc = self.driver.find_element_by_xpath('//*[@id="overview"]/div/div[3]/div/span[2]')
             try:
                 desc.click()
-                WebDriverWait(self.driver,5)
+                WebDriverWait(self.driver,1)
                 resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
@@ -325,9 +368,9 @@ class SearchSpider(scrapy.Spider):
         try:
             WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH,'//*[@id="views"]/div/div[2]/div[2]/div[3]/div[10]/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/span')))
         except:
-            yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
-                callback=self.parse,)
-            return
+            yield scrapy.Request(url="https://www.proptiger.com/%s/property-sale?page=%d" % (self.city,self.page),
+                      callback=self.parse)
+            
 
         # Sync scrapy and selenium so they agree on the page we're looking at then let scrapy take over
         resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
@@ -336,10 +379,10 @@ class SearchSpider(scrapy.Spider):
             url = resp.urljoin(href.extract())
             yield scrapy.Request(url, callback=self.parse_property)
 
-        # if self.page == 57 :
-        #     return
+        if self.page == self.end_page :
+            return
 
-        # self.page += 1
-        # yield scrapy.Request(url="https://www.proptiger.com/noida/property-sale?page=%d" % self.page,
-        #               callback=self.parse,)
+        self.page += 1
+        yield scrapy.Request(url="https://www.proptiger.com/%s/property-sale?page=%d" % (self.city,self.page),
+                      callback=self.parse)
 
