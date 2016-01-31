@@ -17,7 +17,7 @@ from tkinter import *
 class SearchSpider(scrapy.Spider):
     name = "proptiger"
     page = 0
-    start_page =81
+    start_page =0
     end_page = 0
     root = None
     city = ""
@@ -30,11 +30,11 @@ class SearchSpider(scrapy.Spider):
         self.city  = entry[1].get()
         start_page = entries[1]
         self.start_page = start_page[1].get()
-        self.page = self.start_page
+        self.page = int(self.start_page)
         end_page = entries[2]
-        self.end_page = end_page[1].get()
+        self.end_page = int(end_page[1].get())
         print('%s: "%s"' % (field, self.city)) 
-        self.start_urls = ['https://www.proptiger.com/%s/property-sale?page=%s' % (self.city,str(self.start_page))]
+        self.start_urls = ['https://www.proptiger.com/%s/property-sale?page=%s' % (self.city,self.start_page)]
         self.root.destroy()
 
     def makeform(self,fields):
@@ -378,6 +378,7 @@ class SearchSpider(scrapy.Spider):
         for href in resp.xpath('//*[@id="views"]/div/div[2]/div[2]/div[3]/div/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/@href'):
             url = resp.urljoin(href.extract())
             yield scrapy.Request(url, callback=self.parse_property)
+            break
 
         if self.page == self.end_page :
             return
