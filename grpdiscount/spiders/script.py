@@ -1,17 +1,10 @@
-import sys
-sys.path.append('/home/shivji/scrapy/grpdiscount')
-from twisted.internet import reactor
-from scrapy.crawler import Crawler
-from scrapy import log, signals
-from grpdiscount.spiders.proptiger import SearchSpider
-from scrapy.utils.project import get_project_settings
+import scrapy
+from scrapy.crawler import CrawlerProcess
+from proptiger import SearchSpider
 
-spider = SearchSpider()
-settings = get_project_settings()
-crawler = Crawler(settings)
-crawler.signals.connect(reactor.stop, signal=signals.spider_closed)
-crawler.configure()
-crawler.crawl(spider)
-crawler.start()
-log.start()
-reactor.run() 
+process = CrawlerProcess({
+    'USER_AGENT': 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)'
+})
+
+process.crawl(SearchSpider)
+process.start() 
