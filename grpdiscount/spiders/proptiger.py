@@ -10,9 +10,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import time
 import xlwt
-
-import Tkinter as tkinter
-from tkinter import *
+import MySQLdb
+from Tkinter import *
 
 class SearchSpider(scrapy.Spider):
     name = "proptiger"
@@ -20,20 +19,25 @@ class SearchSpider(scrapy.Spider):
     start_page =0
     end_page = 0
     root = None
+    state = ""
     city = ""
     allowed_domains = ['www.proptiger.com']
     start_urls = None
 
     def fetch(self,entries):
-        entry = entries[0]
-        field = entry[0]
-        self.city  = entry[1].get()
-        start_page = entries[1]
+        state = entries[1]
+        state_field = state[0]
+        SearchSpider.state = state[1].get()
+        city = entries[0]
+        field = city[0]
+        self.city  = city[1].get()
+        start_page = entries[2]
         self.start_page = start_page[1].get()
         self.page = int(self.start_page)
-        end_page = entries[2]
+        end_page = entries[3]
         self.end_page = int(end_page[1].get())
-        print('%s: "%s"' % (field, self.city)) 
+        print('%s: %s' % (field, self.city)) 
+        print  ('%s: %s' %  (state_field,self.state))
         self.start_urls = ['https://www.proptiger.com/%s/property-sale?page=%s' % (self.city,self.start_page)]
         self.root.destroy()
 
@@ -50,27 +54,21 @@ class SearchSpider(scrapy.Spider):
        return entries
 
     def __init__(self, filename=None):
-        fields = 'City Name', 'start_page' ,'end_page'
+        fields = 'City Name', 'State Name', 'start_page' ,'end_page'
         self.root = Tk()
         self.root.title('GrpDiscount')
-        self.root.geometry("500x500")
+        self.root.geometry("500x600")
         ents = self.makeform( fields)
         self.root.bind('<Return>', (lambda event, e=ents: self.fetch(e)))   
         b1 = Button(self.root, text='Extract data',
                 command=(lambda e=ents: self.fetch(e)))
         b1.pack(side=TOP, padx=5, pady=5)
         self.root.mainloop()
-        # wire us up to selenium
-        #chromedriver = '/home/shivji/Downloads/chromedriver_linux64'
-        #os.environ["webdriver.chrome.driver"] = chromedriver
-        #self.driver = webdriver.Chrome()
-        #self.input_city()
         self.driver = webdriver.Firefox()
         dispatcher.connect(self.spider_closed, signals.spider_closed)
 
     def spider_closed(self, spider):
         self.driver.close()
-
 
     def add_in_sheet(self,item):
         workbook = xlwt.Workbook()
@@ -162,17 +160,73 @@ class SearchSpider(scrapy.Spider):
                 col+=1
         workbook.save(item["property_name"]+'.xlsx')
 
+    def insertdb(self,item):
+        try :
+            types = ""
+            for bhk in item['property_bhk']:
+                types += str(bhk) + ", "
+            bedroom = ""
+            for bed in item['bedroom']:
+                bedroom += str(bed) + ", "
+            bathroom = ""
+            for bath in item['bathroom']:
+                bathroom+= str(bath) + ", "
+            bsize = "" 
+            prop = item['property_size']
+            for i in range(len(prop)):
+                bsize += str(prop[i]) + ", "
+            brate = ""
+            prop = item['property_price']
+            for i in range(len(prop)):
+                brate += str(prop[i]) + ", "
+            photos = ""
+            temp = item['photos']
+            for image in temp:
+                if not 'youtube' in image:
+                    photos += str(image) + ", "
+            print types
+            print bedroom
+            print bathroom
+            print bsize
+            print brate
+            print SearchSpider.state
+            print item['description']
+            db = MySQLdb.connect("localhost","root","123456","property" )
+            cursor = db.cursor()
+            sql = "INSERT INTO PROPERTY(NAME, STATE,CITY,ADDRESS, \
+                DESCRIPTION,PRICEPERSQUFT,USP,\
+                TYPES,BATHROOMS,BEDROOMS,BSIZES,BRATE, \
+                AMENITIES,IMAGE,LAUNCHEDDATE,POSSESSIONDATE, \
+                AREA,TOTALUNITS,BSTATUS,MAXSIZE) \
+                VALUES ('%s', '%s', '%s', '%s', \
+                '%s', '%s', '%s',\
+                '%s', '%s', '%s', '%s', '%s', \
+                '%s', '%s', '%s', '%s', \
+                '%s', '%s', '%s', '%s')" % \
+                (item['property_name'], SearchSpider.state, self.city, item['address'], \
+                    item['description'], item['price_per_sqft'], item['speciality'],\
+                    types, bathroom, bedroom, bsize, brate, \
+                    item['amenities'], photos, item['launch_date'], item['possession_date'], \
+                    item['total_area'], item['total_apartment'], item['status'], item['area_range'])
+        except :
+            print "db error"
+        # Execute the SQL command
+        cursor.execute(sql)
+        # Commit your changes in the database
+        db.commit()
+        # Rollback in case there is any error
+        time.sleep(2)
+        db.close()
+
     def parse_property(self, response):
         item = {}
         # Load the current page into Selenium
         self.driver.get(response.url)
-
         try:
             WebDriverWait(self.driver, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="overview"]/div/div[1]/h2')))
         except TimeoutException:
             print "Time out"
             return
-
         # Sync scrapy and selenium so they agree on the page we're looking at then let scrapy take over
         resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
         item['property_name'] = ""
@@ -183,7 +237,7 @@ class SearchSpider(scrapy.Spider):
 
         main_address = format(resp.xpath('//*[@id="views"]/div/div/div[2]/div/div[2]/div/div[1]/div/div/div[2]/div[1]/span/text()').extract())
         locality = format(resp.xpath('//*[@id="views-"]/div/div/div[2]/div/div[2]/div/div[1]/div/div/div[2]/div[2]/span/text()').extract())
-        item['address'] =""
+        item['address'] =" "
         item['address'] = main_address[3:-2] +  ', ' + locality[3:-2]
 
         item['builder_name'] = ""
@@ -192,7 +246,6 @@ class SearchSpider(scrapy.Spider):
         builder_name = builder_name.split()
         if len(builder_name) > 1:
             item['builder_name'] = builder_name[1]
-
         item['status'] = ""
         item['possession_date'] = ""
         item['area_range'] = ""
@@ -228,15 +281,19 @@ class SearchSpider(scrapy.Spider):
                 resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
+                item['description'] = item['description'].replace("'",'')
             except:
                 print 'Full description is not available....'
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
+                item['description'] = item['description'].replace("'",'')
+
         except:
             try:
                 print "full discription available"
                 description = format(resp.xpath('//*[@id="overview"]/div/div[3]/div/span[@itemprop="description"]/text()').extract())
                 item['description'] = description[3:-2]
+                item['description'] = item['description'].replace("'",'')
             except:
                 item['description'] = ""
 
@@ -246,8 +303,9 @@ class SearchSpider(scrapy.Spider):
             main_amenity = main_amenity.replace("u'",'')
             main_amenity = main_amenity.replace('u"','')
             main_amenity = main_amenity.replace("'",'')
+            main_amenity = main_amenity.replace('"','')
             main_amenity = main_amenity[1:-1]
-            main_amenity = main_amenity.replace(',','\n')
+            #main_amenity = main_amenity.replace(',','\n')
         else :
             main_amenity = ""
         secondary_amenity = resp.xpath('//div[@class="amenitiesContainer"]/div/ul//li/text()')
@@ -256,8 +314,9 @@ class SearchSpider(scrapy.Spider):
             secondary_amenity = secondary_amenity.replace("u'",'')
             secondary_amenity = secondary_amenity.replace('u"','')
             secondary_amenity = secondary_amenity.replace("'",'')
+            secondary_amenity = secondary_amenity.replace('"','')
             secondary_amenity = secondary_amenity[1:-1]
-            secondary_amenity = secondary_amenity.replace(',','\n')
+            #secondary_amenity = secondary_amenity.replace(',','\n')
         else :
             secondary_amenity = ""
         item['amenities'] = main_amenity + secondary_amenity
@@ -287,7 +346,6 @@ class SearchSpider(scrapy.Spider):
         except:
             item['speciality'] = ""
             print "speciality is not working"
-        
         item['property_bhk']=[]
         item['property_size'] = []
         for size in resp.xpath('//div[contains(@class,"projAccHeadTextInfo")]'):
@@ -320,7 +378,7 @@ class SearchSpider(scrapy.Spider):
                     price_lac = price_lac[3:-2]
                     price_sqft = price_sqft[10:-8]
                     item['price_per_sqft'] = price_sqft
-                    item['property_price'] += [price_lac + ", (" + price_sqft + ')']
+                    item['property_price'] += [price_lac + " (" + price_sqft + ')']
                 except :
                     try :
                         item['property_price'] += [price_lac]
@@ -337,8 +395,8 @@ class SearchSpider(scrapy.Spider):
         item['bedroom']  = []
         item['bathroom']  =[]
         for size in resp.xpath('//div[contains(@class,"projAccorContInfo")]'):
-            bedroom = format(size.xpath('div[2]/div[2]/div[1]/span/text()').extract())
-            bathroom = format(size.xpath('div[2]/div[2]/div[2]/span/text()').extract())
+            bedroom = format(size.xpath('div[2]/div[@data-ng-if="!isPlot"]/div[1]/span/text()').extract())
+            bathroom = format(size.xpath('div[2]/div[@data-ng-if="!isPlot"]/div[2]/span/text()').extract())
             try :
                 bedroom = bedroom[3:-2]
                 bathroom = bathroom[3:-2]
@@ -352,37 +410,36 @@ class SearchSpider(scrapy.Spider):
         for image in resp.xpath('//div[@id="projectImages"]//div[@class="pt-thums-img-gallery"]/ul[@class="carouselIndicators"]/li'):
             try:
                 img = format(image.xpath('a/div/img/@src').extract())
-                img = img[3:-2]
-                item['photos'] += [img]
+                count = img.count('jpeg')
+                for i in xrange(count):
+                    s = img.index('http')
+                    e = img.index('jpeg')
+                    img1 = img[s:e+4]
+                    img = img.replace('jpeg',"",1)
+                    img = img.replace('http',"",1)
+                    item['photos'] += [img1]
             except :
-                item['photos'] += []
-
+                continue
         item['main_image'] = item['photos'][0]
         self.add_in_sheet(item)
-
+        self.insertdb(item)
 
     def parse(self, response):
         self.driver.get(response.url)
-
-
         try:
             WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH,'//*[@id="views"]/div/div[2]/div[2]/div[3]/div[10]/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/span')))
         except:
             yield scrapy.Request(url="https://www.proptiger.com/%s/property-sale?page=%d" % (self.city,self.page),
                       callback=self.parse)
-            
-
         # Sync scrapy and selenium so they agree on the page we're looking at then let scrapy take over
         resp = TextResponse(url=self.driver.current_url, body=self.driver.page_source, encoding='utf-8');
 
         for href in resp.xpath('//*[@id="views"]/div/div[2]/div[2]/div[3]/div/div/div/div/div/div[2]/div[1]/div[1]/div[1]/div[1]/div/a/@href'):
             url = resp.urljoin(href.extract())
             yield scrapy.Request(url, callback=self.parse_property)
-            break
 
         if self.page == self.end_page :
             return
-
         self.page += 1
         yield scrapy.Request(url="https://www.proptiger.com/%s/property-sale?page=%d" % (self.city,self.page),
                       callback=self.parse)
