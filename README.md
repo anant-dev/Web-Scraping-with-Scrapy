@@ -2,8 +2,8 @@
 
 It is a small script for scraping data and store data in excel(.xlsx) file.
 
-It scrape data of hosing.com
+It scrape data of hosing.com and Proptiger.com
 
-scraping starts with a list of starts_url which is defined in grp_spider.py file.
+It use Scrapy ans Selenium python tool for data scraping
 
-It use SCRAPY tool which use python language.
+For more information about scrapy go through http://scrapy.org/
